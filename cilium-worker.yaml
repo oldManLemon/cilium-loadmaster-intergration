@@ -1,0 +1,17 @@
+# Create the "loadmaster" namespace
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: loadmaster
+---
+# Define the "cilium-worker" pod within the "loadmaster" namespace
+apiVersion: v1
+kind: Pod
+metadata:
+  name: cilium-worker
+  namespace: loadmaster
+spec:
+  containers:
+  - name: cilium-worker-container
+    image: cilium/cilium:stable
+    # Add other pod configuration options as needed
