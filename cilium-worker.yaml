@@ -37,19 +37,6 @@ roleRef:
   name: cilium-access-role
   apiGroup: rbac.authorization.k8s.io
 ---
-#* Job doesn't end properly so going to contain it in a script which will exit 0 and hopefully end the job
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: cilium-node-grab-configmap
-  namespace: loadmaster
-data:
-  run-kubectl.sh: |
-    #!/bin/sh
-    output=$(kubectl get cn)
-    echo "$output"
-    exit 0
----
 # Define the "cilium-worker" CronJob within the "loadmaster" namespace
 apiVersion: batch/v1
 kind: CronJob
@@ -69,26 +56,32 @@ spec:
               name: cilium-node-grab-configmap
           - name: output-volume
             emptyDir: {}
+          - name: api-script-volume
+            configMap:
+              name: loadmaster-api-calls
           containers:
           - name: cilium-worker-container
             image: bitnami/kubectl
             command: ["/bin/sh", "-c"]
             args:
             - "kubectl get cn > /output/kube.log"
-            - "sleep 500"
             volumeMounts:
             - name: output-volume
               mountPath: /output
             - name: script-volume
               mountPath: /config/scripts
-            ###CONTAINER CURL ###    
           - name: curl-container
             image: curlimages/curl
-            command: ["sh", "-c"]
+            command: ["/bin/sh", "-c"]
             args:
-            - "sleep 500"
-            - "cat /output/kube.log"
+            - >
+              sleep 10 && awk 'NR > 1 { split($2, a, "."); printf "%s.%s.%s.%s/24\t%s\n", a[1], a[2], a[3], 0, $3 }' /output/kube.log > /output/awk.log
+              && cp /config/scripts/api.sh /output/api.sh
+              && chmod +x /output/api.sh
+              && /output/api.sh && sleep 500
             volumeMounts:
             - name: output-volume
               mountPath: /output
+            - name: api-script-volume
+              mountPath: /config/scripts
           restartPolicy: OnFailure

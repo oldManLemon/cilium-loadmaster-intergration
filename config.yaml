@@ -1,0 +1,64 @@
+#* Job doesn't end properly so going to contain it in a script which will exit 0 and hopefully end the job
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cilium-node-grab-configmap
+  namespace: loadmaster
+data:
+  run-kubectl.sh: |
+    #!/bin/sh
+    output=$(kubectl get cn)
+    echo "$output"
+    exit 0
+---
+#* API calls we should maybe consider a list all delete all and rebuild all
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: loadmaster-api-calls
+  namespace: loadmaster
+data:
+  api.sh: |
+    #!/bin/sh
+
+    # Input file containing modified kube.log
+    input_file="/output/awk.log"
+
+    # Load Master IP address and API key
+    load_master_ip="<Addresss>"
+    api_key="<APIKEY>"
+
+    # Read each line from the input file
+    while IFS=$'\t' read -r cilium_ip internal_ip
+    do
+      # Generate the curl command using the extracted values
+      curl_command="curl -k --location 'https://$load_master_ip/accessv2' \
+    --data '{
+        \"cmd\": \"addroute\",
+        \"apikey\": \"$api_key\",
+        \"dest\": \"$cilium_ip\",
+        \"gateway\": \"$internal_ip\"
+    }'"
+
+      # Print the curl command
+      echo "Executing curl command for Cilium IP: $cilium_ip and Internal IP: $internal_ip"
+      echo "Command: $curl_command"
+      echo "---"
+
+      # Execute the curl command and capture the output and errors
+      curl_output=$(eval "$curl_command" 2>&1)
+
+      # Check the exit code of the curl command
+      if [[ $? -eq 0 ]]; then
+        echo "Curl command succeeded with exit code 0"
+      else
+        echo "Curl command failed with exit code $?"
+      fi
+
+      # Print the captured output and errors
+      echo "Curl Output:"
+      echo "$curl_output"
+      echo "---"
+
+    done < "$input_file"
+    exit 0
