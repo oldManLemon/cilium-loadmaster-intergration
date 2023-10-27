@@ -78,7 +78,7 @@ spec:
               sleep 10 && awk 'NR > 1 { split($2, a, "."); printf "%s.%s.%s.%s/24\t%s\n", a[1], a[2], a[3], 0, $3 }' /output/kube.log > /output/awk.log
               && cp /config/scripts/api.sh /output/api.sh
               && chmod +x /output/api.sh
-              && /output/api.sh && sleep 500
+              && /output/api.sh
             volumeMounts:
             - name: output-volume
               mountPath: /output
