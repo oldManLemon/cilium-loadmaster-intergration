@@ -15,3 +15,99 @@ spec:
   - name: cilium-worker-container
     image: cilium/cilium:stable
     # Add other pod configuration options as needed
+# Create the "loadmaster" namespace
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: loadmaster
+---
+# Service Account
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: cilium-worker-sa
+  namespace: loadmaster
+---
+# Define a ClusterRole that allows access to Cilium nodes in the "kube-system" namespace
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: cilium-access-role
+  namespace: kube-system
+rules:
+- apiGroups: ["cilium.io"]
+  resources: ["ciliumnodes"]
+  verbs: ["get", "list"]
+---
+# Create a ClusterRoleBinding to associate the ClusterRole with the service account in the "loadmaster" namespace
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: cilium-access-binding
+  namespace: kube-system # FOOL!
+subjects:
+- kind: ServiceAccount
+  name: cilium-worker-sa
+  namespace: loadmaster
+roleRef:
+  kind: ClusterRole
+  name: cilium-access-role
+  apiGroup: rbac.authorization.k8s.io
+---
+#* Job doesn't end properly so going to contain it in a script which will exit 0 and hopefully end the job
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cilium-node-grab-configmap
+  namespace: loadmaster
+data:
+  run-kubectl.sh: |
+    #!/bin/sh
+    output=$(kubectl get cn)
+    echo "$output"
+    exit 0
+---
+# Define the "cilium-worker" CronJob within the "loadmaster" namespace
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: cilium-worker-cronjob
+  namespace: loadmaster
+spec:
+  schedule: "0 * * * *"  # Run every hour
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          serviceAccountName: cilium-worker-sa
+          volumes:
+          - name: script-volume
+            configMap:
+              name: cilium-node-grab-configmap
+          - name: output-volume
+            emptyDir: {}
+          containers:
+          - name: cilium-worker-container
+            image: bitnami/kubectl
+            command: ["/bin/sh", "-c"]
+            args:
+            - sleep 50
+            - "cp /config/scripts/run-kubectl.sh /tmp/run-kubectl.sh && chmod +x /tmp/run-kubectl.sh"
+            - "/tmp/run-kubectl.sh > /output/kubectl-output.log"
+            - "echo 'Çomplete'"
+            volumeMounts:
+            - name: output-volume
+              mountPath: /output
+            - name: script-volume
+              mountPath: /config/scripts
+            ###CONTAINER CURL ###    
+          - name: curl-container
+            image: curlimages/curl
+            command: ["sh", "-c"]
+            args:
+            - "sleep 50"
+            - "cat /output/kubectl-output.log"
+            volumeMounts:
+            - name: output-volume
+              mountPath: /output
+          restartPolicy: Never
