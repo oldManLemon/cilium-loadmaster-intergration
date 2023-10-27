@@ -4,23 +4,6 @@ kind: Namespace
 metadata:
   name: loadmaster
 ---
-# Define the "cilium-worker" pod within the "loadmaster" namespace
-apiVersion: v1
-kind: Pod
-metadata:
-  name: cilium-worker
-  namespace: loadmaster
-spec:
-  containers:
-  - name: cilium-worker-container
-    image: cilium/cilium:stable
-    # Add other pod configuration options as needed
-# Create the "loadmaster" namespace
-apiVersion: v1
-kind: Namespace
-metadata:
-  name: loadmaster
----
 # Service Account
 apiVersion: v1
 kind: ServiceAccount
@@ -91,10 +74,8 @@ spec:
             image: bitnami/kubectl
             command: ["/bin/sh", "-c"]
             args:
-            - sleep 50
-            - "cp /config/scripts/run-kubectl.sh /tmp/run-kubectl.sh && chmod +x /tmp/run-kubectl.sh"
-            - "/tmp/run-kubectl.sh > /output/kubectl-output.log"
-            - "echo 'Çomplete'"
+            - "kubectl get cn > /output/kube.log"
+            - "sleep 500"
             volumeMounts:
             - name: output-volume
               mountPath: /output
@@ -105,9 +86,9 @@ spec:
             image: curlimages/curl
             command: ["sh", "-c"]
             args:
-            - "sleep 50"
-            - "cat /output/kubectl-output.log"
+            - "sleep 500"
+            - "cat /output/kube.log"
             volumeMounts:
             - name: output-volume
               mountPath: /output
-          restartPolicy: Never
+          restartPolicy: OnFailure
